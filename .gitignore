@@ -1,0 +1,13 @@
+# build output
+build/
+*.app/
+*.zip
+
+# Swift / Xcode
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# OS
+.DS_Store

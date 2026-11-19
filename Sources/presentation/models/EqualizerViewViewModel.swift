@@ -1,0 +1,167 @@
+//
+//  EqualizerViewViewModel.swift
+//  Nothing X MacOS
+//
+//  Created by Daniel on 2025/2/19.
+//
+
+import Foundation
+import SwiftUI
+
+class EqualizerViewViewModel : ObservableObject {
+
+
+    private let switchEqUseCase: SwitchEqUseCaseProtocol
+    private let nothingService: NothingService
+
+    @Published var eq: EQProfiles = .BALANCED
+
+    // Custom EQ
+    @Published var isAdvancedEQEnabled: Bool = false
+    @Published var customBass: Double = 0.0
+    @Published var customMid: Double = 0.0
+    @Published var customTreble: Double = 0.0
+
+    // Enhanced Bass
+    @Published var isEnhancedBassEnabled: Bool = false
+    @Published var enhancedBassLevel: Int = 0
+
+    // Device capabilities
+    @Published var supportsCustomEQ: Bool = false
+    @Published var supportsEnhancedBass: Bool = false
+
+    // EQ Presets
+    @Published var savedPresets: [EQPreset] = []
+    @Published var isNamingPreset: Bool = false
+    @Published var newPresetName: String = ""
+
+    var isUpdatingFromDevice = false
+
+    private var debounceTimer: Timer?
+    private let presetStorage = EQPresetStorage.shared
+    private var observer: NSObjectProtocol?
+
+    init(nothingService: NothingService) {
+
+        self.nothingService = nothingService
+        self.switchEqUseCase = SwitchEqUseCase(service: nothingService)
+
+
+        savedPresets = presetStorage.getAll()
+
+        observer = NotificationCenter.default.addObserver(forName: Notification.Name(DataNotifications.REPOSITORY_DATA_UPDATED.rawValue), object: nil, queue: .main) { [weak self] notification in
+            guard let self else { return }
+
+            if let device = notification.object as? NothingDeviceEntity {
+
+                if self.eq != device.listeningMode {
+                    self.eq = device.listeningMode
+                }
+
+                // Update capabilities
+                let caps = DeviceCapabilities.capabilities(for: device.codename)
+                self.supportsCustomEQ = caps.supportsCustomEQ
+                self.supportsEnhancedBass = caps.supportsEnhancedBass
+
+                // Update custom EQ values from device
+                self.isUpdatingFromDevice = true
+                self.isAdvancedEQEnabled = device.isAdvancedEQEnabled
+                self.customBass = Double(device.customEQBass)
+                self.customMid = Double(device.customEQMid)
+                self.customTreble = Double(device.customEQTreble)
+                self.isEnhancedBassEnabled = device.isEnhancedBassEnabled
+                self.enhancedBassLevel = device.enhancedBassLevel
+                self.isUpdatingFromDevice = false
+            }
+        }
+
+        // Ask for the current state so a freshly created view model doesn't
+        // show defaults until the next device event
+        NotificationCenter.default.post(name: Notification.Name(DataNotifications.REQUEST_STATE.rawValue), object: nil)
+    }
+
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+        debounceTimer?.invalidate()
+    }
+
+
+
+    func switchEQ(eq: EQProfiles) {
+        if eq == .CUSTOM {
+            // Enable advanced EQ mode
+            if !isAdvancedEQEnabled {
+                nothingService.setAdvancedEQ(enabled: true)
+            }
+            self.eq = .CUSTOM
+        } else {
+            // Disable advanced EQ if switching to preset
+            if isAdvancedEQEnabled {
+                nothingService.setAdvancedEQ(enabled: false)
+            }
+            switchEqUseCase.switchEQ(mode: eq)
+        }
+    }
+
+    func sendCustomEQ() {
+        debounceTimer?.invalidate()
+        debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.nothingService.switchCustomEQ(
+                bass: Float(self.customBass),
+                mid: Float(self.customMid),
+                treble: Float(self.customTreble)
+            )
+        }
+    }
+
+    /// Level used when enhanced bass is switched on without one: the
+    /// user's last pick, else 3 (the middle of 1…5)
+    private static let lastBassLevelKey = "enhancedBassLastLevel"
+    private var preferredBassLevel: Int {
+        let saved = UserDefaults.standard.integer(forKey: Self.lastBassLevelKey)
+        return (1...5).contains(saved) ? saved : 3
+    }
+
+    func switchEnhancedBass(enabled: Bool) {
+        if enabled && !(1...5).contains(enhancedBassLevel) {
+            enhancedBassLevel = preferredBassLevel
+        }
+        nothingService.switchEnhancedBass(enabled: enabled, level: enhancedBassLevel)
+    }
+
+    func setEnhancedBassLevel(level: Int) {
+        enhancedBassLevel = level
+        UserDefaults.standard.set(level, forKey: Self.lastBassLevelKey)
+        nothingService.switchEnhancedBass(enabled: isEnhancedBassEnabled, level: level)
+    }
+
+    // MARK: - EQ Presets
+
+    func saveCurrentAsPreset(name: String) {
+        let preset = EQPreset(
+            name: name,
+            bass: Float(customBass),
+            mid: Float(customMid),
+            treble: Float(customTreble)
+        )
+        presetStorage.save(preset: preset)
+        savedPresets = presetStorage.getAll()
+    }
+
+    func loadPreset(_ preset: EQPreset) {
+        if eq != .CUSTOM {
+            switchEQ(eq: .CUSTOM)
+        }
+        customBass = Double(preset.bass)
+        customMid = Double(preset.mid)
+        customTreble = Double(preset.treble)
+        sendCustomEQ()
+    }
+
+    func deletePreset(_ preset: EQPreset) {
+        presetStorage.delete(id: preset.id)
+        savedPresets = presetStorage.getAll()
+    }
+
+}

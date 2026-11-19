@@ -1,0 +1,22 @@
+Pod Studio — third-party work and attribution
+
+Pod Studio is a modified version of nothing-x-macos and is distributed under the
+GNU General Public License v3.0 (see LICENSE).
+
+- nothing-x-macos, by nikiomori — GPL-3.0 — https://github.com/nikiomori/nothing-x-macos
+  (Bluetooth/RFCOMM device control, most device screens, assets)
+- nothing-x-macos (original), by Arunavo Ray — https://github.com/arunavo4/nothing-x-macos
+  (original UI and project foundation)
+- Ear (web), radiance-project — https://github.com/radiance-project/ear-web
+  (protocol reference; no code copied for Pod Studio additions)
+- BudsLink, maniacx — https://github.com/maniacx/BudsLink
+  (protocol cross-check for CMF listening-mode and EQ commands)
+- Fonts in Sources/resources/fonts (5by7, NDot 45) retain their authors' licences.
+
+Pod Studio additions (2026-11-15 onward): Mac Audio / Music Guard, listening profiles
+with checksum-verified readback, CMF B172 protocol fixes, Spotify player, theme refresh.
+Files carrying a "Pod Studio" header comment are additions; other files are upstream,
+some with modifications.
+
+Nothing, CMF and related product names and imagery are trademarks/property of
+Nothing Technology Limited. This project is unofficial and not endorsed by them.
